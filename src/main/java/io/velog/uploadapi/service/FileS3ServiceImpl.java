@@ -1,0 +1,85 @@
+package io.velog.uploadapi.service;
+
+import com.amazonaws.AmazonClientException;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.transfer.TransferManager;
+import com.amazonaws.services.s3.transfer.Upload;
+import com.amazonaws.services.s3.transfer.model.UploadResult;
+import io.velog.uploadapi.payload.UploadFileResponse;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
+import java.util.Optional;
+@Service
+public class FileS3ServiceImpl implements FileService {
+
+    @Value("${cloud.aws.s3.bucket}")
+    private String bucket;
+    private final AmazonS3Client amazonS3Client;
+    public FileS3ServiceImpl(AmazonS3Client amazonS3Client) {
+        this.amazonS3Client = amazonS3Client;
+    }
+
+    @Override
+    public UploadFileResponse upload(MultipartFile file) throws IOException{
+        return uploadOnS3(file);
+    }
+    private UploadFileResponse uploadOnS3(MultipartFile uploadFile) throws IOException {
+        UploadFileResponse uploadFileResponse = null;
+        // AWS S3 전송 객체 생성
+        final TransferManager transferManager = new TransferManager(this.amazonS3Client);
+        // 요청 객체 생성
+        final PutObjectRequest request = new PutObjectRequest(bucket, uploadFile.getOriginalFilename(), uploadFile.getInputStream(), getMetadataValue(uploadFile));
+        // 업로드 시도
+        final Upload upload =  transferManager.upload(request);
+
+        try {
+            UploadResult result = upload.waitForUploadResult();
+            if (upload.getState().name().equals("Completed")){
+                uploadFileResponse = new UploadFileResponse( result.getKey(),result.getETag(), getMetadataValue(uploadFile).getContentType(),uploadFile.getSize());
+            }else {
+                new Exception("Upload fail");
+            }
+        } catch (AmazonClientException amazonClientException) {
+            System.out.println("amazonClientException " + amazonClientException);
+        } catch (InterruptedException ex) {
+            System.out.println("InterruptedException " + ex);
+        }
+        return  uploadFileResponse;
+    }
+
+    private ObjectMetadata getMetadataValue(MultipartFile uploadFile){
+        String fileName = uploadFile.getOriginalFilename();
+        long fileSize = uploadFile.getSize();
+        String ext = fileName.substring(fileName.lastIndexOf(".") + 1);
+
+        ObjectMetadata objectMetadata = new ObjectMetadata();
+
+        if (ext.equals(".jpg")){
+            objectMetadata.setContentType(MediaType.IMAGE_JPEG_VALUE);
+        }else if (ext.equals(".png")){
+            objectMetadata.setContentType(MediaType.IMAGE_PNG_VALUE);
+        }else {
+            objectMetadata.setContentType("application/octet-stream");
+        }
+        objectMetadata.setContentLength(fileSize);
+        return objectMetadata;
+    }
+
+    /*
+    private Optional<File> convert(MultipartFile file) throws IOException {
+        File convertFile = new File(file.getOriginalFilename());
+        if(convertFile.createNewFile()) {
+            try (FileOutputStream fos = new FileOutputStream(convertFile)) {
+                fos.write(file.getBytes());
+            }
+            return Optional.of(convertFile);
+        }
+        return Optional.empty();
+    }
+    */
+}
