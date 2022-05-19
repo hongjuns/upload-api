@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,7 +18,6 @@ import java.nio.file.StandardCopyOption;
 public class FileLocalServiceImpl implements FileService {
 
     private final Path fileStorageLocation;
-
     @Autowired
     public FileLocalServiceImpl(FileStorageProperties fileStorageProperties) {
         this.fileStorageLocation = Paths.get(fileStorageProperties.getUploadDir())
@@ -32,7 +30,6 @@ public class FileLocalServiceImpl implements FileService {
         }
 
     }
-
     @Override
     public UploadFileResponse upload(MultipartFile file) {
         UploadFileResponse uploadFileResponse = null;
@@ -53,17 +50,26 @@ public class FileLocalServiceImpl implements FileService {
         return uploadFileResponse;
     }
 
-    public String storeFile(MultipartFile file) {
-        // Normalize file name
-        String fileName = StringUtils.cleanPath(file.getOriginalFilename());
-
+    @Override
+    public byte[] download(String fileKey) throws IOException {
+        byte[] data = null;
         try {
-            // Check if the file's name contains invalid characters
+            Path path = Paths.get(this.fileStorageLocation.resolve(fileKey).normalize().toString());
+            data = Files.readAllBytes(path);
+        }catch (IOException ex){
+            throw new IOException("IOE Error Message= " + ex.getMessage());
+        }
+        return data;
+    }
+
+    public String storeFile(MultipartFile file) {
+        String fileName = StringUtils.cleanPath(file.getOriginalFilename());
+        try {
+
             if(fileName.contains("..")) {
                 throw new FileStorageException("Sorry! Filename contains invalid path sequence " + fileName);
             }
 
-            // Copy file to the target location (Replacing existing file with the same name)
             Path targetLocation = this.fileStorageLocation.resolve(fileName);
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
 

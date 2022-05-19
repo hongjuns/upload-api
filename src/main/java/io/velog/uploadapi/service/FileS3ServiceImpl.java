@@ -2,18 +2,18 @@ package io.velog.uploadapi.service;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.*;
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.Upload;
 import com.amazonaws.services.s3.transfer.model.UploadResult;
+import com.amazonaws.util.IOUtils;
 import io.velog.uploadapi.payload.UploadFileResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
-import java.util.Optional;
+
 @Service
 public class FileS3ServiceImpl implements FileService {
 
@@ -28,13 +28,25 @@ public class FileS3ServiceImpl implements FileService {
     public UploadFileResponse upload(MultipartFile file) throws IOException{
         return uploadOnS3(file);
     }
+    @Override
+    public byte[] download(String fileKey) throws IOException {
+        byte[] content = null;
+        final S3Object s3Object = amazonS3Client.getObject(bucket, fileKey);
+        final S3ObjectInputStream stream = s3Object.getObjectContent();
+        try {
+            content = IOUtils.toByteArray(stream);
+            s3Object.close();
+        } catch(final IOException ex) {
+            throw new IOException("IO Error Message= " + ex.getMessage());
+        }
+        return content;
+    }
+
     private UploadFileResponse uploadOnS3(MultipartFile uploadFile) throws IOException {
         UploadFileResponse uploadFileResponse = null;
-        // AWS S3 전송 객체 생성
+
         final TransferManager transferManager = new TransferManager(this.amazonS3Client);
-        // 요청 객체 생성
         final PutObjectRequest request = new PutObjectRequest(bucket, uploadFile.getOriginalFilename(), uploadFile.getInputStream(), getMetadataValue(uploadFile));
-        // 업로드 시도
         final Upload upload =  transferManager.upload(request);
 
         try {
@@ -59,9 +71,9 @@ public class FileS3ServiceImpl implements FileService {
 
         ObjectMetadata objectMetadata = new ObjectMetadata();
 
-        if (ext.equals(".jpg")){
+        if (ext.equals("jpg")){
             objectMetadata.setContentType(MediaType.IMAGE_JPEG_VALUE);
-        }else if (ext.equals(".png")){
+        }else if (ext.equals("png")){
             objectMetadata.setContentType(MediaType.IMAGE_PNG_VALUE);
         }else {
             objectMetadata.setContentType("application/octet-stream");
@@ -70,16 +82,4 @@ public class FileS3ServiceImpl implements FileService {
         return objectMetadata;
     }
 
-    /*
-    private Optional<File> convert(MultipartFile file) throws IOException {
-        File convertFile = new File(file.getOriginalFilename());
-        if(convertFile.createNewFile()) {
-            try (FileOutputStream fos = new FileOutputStream(convertFile)) {
-                fos.write(file.getBytes());
-            }
-            return Optional.of(convertFile);
-        }
-        return Optional.empty();
-    }
-    */
 }
