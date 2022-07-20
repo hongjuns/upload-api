@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 public class allRoundFileController {
@@ -24,8 +27,8 @@ public class allRoundFileController {
     * fileLocalServiceImpl : Local Upload Component
     * fileS3ServiceImpl : S3 Upload Component
     */
-    public allRoundFileController(FileService fileS3ServiceImpl) {
-        this.fileService = fileS3ServiceImpl;
+    public allRoundFileController(FileService fileLocalServiceImpl) {
+        this.fileService = fileLocalServiceImpl;
     }
 
     @PostMapping("/uploadFile")
@@ -38,6 +41,15 @@ public class allRoundFileController {
             uploadFileResponse = new UploadFileResponse ("","","",0);
         }
         return uploadFileResponse;
+    }
+
+    @PostMapping("/uploadMultipleFiles")
+    public List<UploadFileResponse> uploadMultipleFiles(@RequestParam("files") MultipartFile[] files){
+
+        return Arrays.asList(files)
+                .stream()
+                .map(file -> uploadFile(file))
+                .collect(Collectors.toList());
     }
 
     @GetMapping(path = "/download")
